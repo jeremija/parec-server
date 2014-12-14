@@ -10,7 +10,8 @@ I decided to write my own server after I found pulseaudio's
 I wanted something plain and simple which would serve my currently playing
 stream so I can play it on my Sonos device.
 
-The only limitation I noticed (which is also present in pulseaudio's server) is
+The only limitation I noticed (which is also present in pulseaudio's network
+server, if enabled) is
  the latency which is on my system around 5 seconds.
 
 Flac encoding is also possible (commented in code), but is disabled as Sonos
