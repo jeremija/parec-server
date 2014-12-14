@@ -32,16 +32,16 @@ var encodedStream = encode(monitor);
 var port = 2000;
 console.log('starting http server on port', port);
 var server = http.createServer(function(request, response) {
-    console.log('got request');
+    var contentType = 'audio/mpeg';
+    // var contentType = 'audio/flac'
+    console.log('setting Content-Type to', contentType);
 
     response.writeHead(200, {
-        // 'Content-Type': 'audio/flac'
-        'Content-Type': 'audio/mpeg'
+        'Content-Type': contentType
     });
 
-    console.log('piping flac stream');
+    console.log('piping encoded stream');
     encodedStream.stdout.pipe(response);
-    console.log('fcn end');
 }).listen(port);
 
 server.on('connection', function(socket) {
