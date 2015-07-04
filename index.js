@@ -2,49 +2,82 @@
 'use strict';
 
 var argv = process.argv;
-var monitor = argv[2] || 'steam.monitor';
+var device = argv[2] || 'steam.monitor';
+
+var encoders = {
+    mp3: {
+        contentType: 'audio/mpeg',
+        command: 'lame',
+        args: ['-V', '0', '-r', '-', '-']
+    },
+    flac: {
+        contentType: 'audio/flac',
+        command: 'flac',
+        args: [
+            '--endian=little',
+            '--sign=signed',
+            '--sample-rate=44100',
+            '--bps=16',
+            '--channels=2',
+            '--silent',
+            '-'
+        ]
+    }
+};
+var encoderType = 'mp3';
 
 var http = require('http'),
     childProcess = require('child_process');
 
-function encode(device) {
-    console.log('starting recording of stream for device', device);
-    var parec = childProcess.spawn('parec', ['-d', device]);
+var hooks = 0;
+var parec = undefined;
+var encoder = undefined;
 
-    console.log('starting flac encoder');
-    // var encodedStream = childProcess.spawn('flac', [
-    //     '--endian=little', '--sign=signed', '--sample-rate=44100', '--bps=16',
-    //     '--channels=2', '--silent', '-'
-    // ]);
-    var encodedStream = childProcess.spawn('lame', ['-V', '0', '-r', '-', '-']);
+function getEncoder() {
+    if (encoder) return encoder;
+    console.log('starting encoder');
+    hooks++;
+    parec = childProcess.spawn('parec', ['-d', device]);
 
-    parec.stdout.pipe(encodedStream.stdin);
-
-    return encodedStream;
+    var encoderCommand = encoders[encoderType];
+    encoder = childProcess.spawn(encoderCommand.command, encoderCommand.args);
+    parec.stdout.pipe(encoder.stdin);
+    return encoder;
 }
 
-var encodedStream = encode(monitor);
-
-// encodedStream.stdout.on('data', function() {
-//     console.log(Date.now(), 'data!');
-// });
+function releaseEncoder() {
+    hooks--;
+    if (hooks > 0) return;
+    console.log('killing encoder because nobody is listening');
+    encoder.kill('SIGINT');
+    parec.kill('SIGINT');
+    encoder = undefined;
+    parec = undefined;
+}
 
 var port = 2000;
 console.log('starting http server on port', port);
 var server = http.createServer(function(request, response) {
-    var contentType = 'audio/mpeg';
-    // var contentType = 'audio/flac'
-    console.log('setting Content-Type to', contentType);
+    var contentType = encoders[encoderType].contentType;
+    console.log('  setting Content-Type to', contentType);
 
     response.writeHead(200, {
         'Content-Type': contentType
     });
 
-    console.log('piping encoded stream');
-    encodedStream.stdout.pipe(response);
+    var encoder = getEncoder();
+
+    encoder.stdout.on('data', function(buffer) {
+        response.write(buffer);
+    });
+
+    request.on('close', function() {
+        response.end();
+        releaseEncoder();
+    });
 }).listen(port);
 
 server.on('connection', function(socket) {
-    console.log('setting no delay true');
+    console.log('New connection: setting no delay true');
     socket.setNoDelay(true);
 });
